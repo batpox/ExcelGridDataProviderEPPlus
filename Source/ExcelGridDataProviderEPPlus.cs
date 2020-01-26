@@ -67,6 +67,11 @@ namespace ExcelGridDataProviderEPPlus
             return new ExcelGridDataRecords(thesettings, openContext);
         }
 
+        /// <summary>
+        /// ??? This is being called for each cell ???
+        /// </summary>
+        /// <param name="dataSettings"></param>
+        /// <returns></returns>
         public string GetDataSummary(byte[] dataSettings)
         {
             ExcelGridDataSettings thesettings = ExcelGridDataSettings.FromBytes(dataSettings);
@@ -238,6 +243,9 @@ namespace ExcelGridDataProviderEPPlus
         }
 
         string _namedRange;
+        /// <summary>
+        /// A rectangular range of excel cells that is given a name
+        /// </summary>
         public string NamedRange
         {
             get { return _namedRange; }
@@ -257,8 +265,13 @@ namespace ExcelGridDataProviderEPPlus
             }
         }
 
+        // An arbitrary default is needed, so 10 columns of two rows is chosen.
         const string DEFAULT_SPECIFIC_RANGE = "A1:B10";
         string _specificRange = DEFAULT_SPECIFIC_RANGE;
+
+        /// <summary>
+        /// An excel range, of the format {upper-left}:{lower-right}. For example: A1:F20
+        /// </summary>
         public string SpecificRange
         {
             get { return _specificRange; }
@@ -272,16 +285,27 @@ namespace ExcelGridDataProviderEPPlus
             set { _rangeType = value; }
         }
 
+        /// <summary>
+        /// The rectangle of excel cells is an entire worksheet
+        /// </summary>
         public bool IsWorksheetRange
         {
             get { return RangeType == RType.WORKSHEET; }
             set { RangeType = RType.WORKSHEET; }
         }
+
+        /// <summary>
+        /// The range is specified by an address, such as "B08:H23"
+        /// </summary>
         public bool IsSpecificRange
         {
             get { return RangeType == RType.SPECIFIC_RANGE; }
             set { RangeType = RType.SPECIFIC_RANGE; }
         }
+
+        /// <summary>
+        /// An Excel range that is given a name.
+        /// </summary>
         public bool IsNamedRange
         {
             get { return RangeType == RType.NAMED_RANGE; }
@@ -335,7 +359,8 @@ namespace ExcelGridDataProviderEPPlus
         const string __TimeStamp = "__TimeStamp";
 
         /// <summary>
-        /// ctor.
+        /// Constructor. Makes sure _workbook, _sheet, and _*Index's are set,
+        /// depending on whether we want sheet, namedRange, or specific range.
         /// </summary>
         /// <param name="settings"></param>
         /// <param name="openContext"></param>
@@ -358,63 +383,67 @@ namespace ExcelGridDataProviderEPPlus
                 _workbook = _package.Workbook;
             }
 
-            if (_package != null)
+            if ( _workbook == null )
+                throw new InvalidDataException($"Cannot find Worksheet for File={settings.FileName}");
+
+            _startRowIndex = 0;
+            _startColumnIndex = 0;
+
+            _sheet = _workbook.Worksheets[settings.Worksheet];
+            if (_sheet == null)
+                throw new InvalidDataException($"Setting Sheet={settings.Worksheet} cannot be fond.");
+
+                if (_package != null)
             {
                 if (settings.IsWorksheetRange)
                 {
-                    _startRowIndex = 0;
-                    _startColumnIndex = 0;
-                    _sheet = _workbook.Worksheets[settings.Worksheet];
-
-                    if (_sheet != null)
+                    ExcelAddressBase usedRange = _sheet.Dimension;
+                    _startRowIndex = usedRange.Start.Row;
+                    _startColumnIndex = usedRange.Start.Column;
+                    _lastRowIndex = usedRange.End.Row;
+                    _lastColumnIndex = usedRange.End.Column;
+                }
+                else if ( settings.IsNamedRange ) // Looking for an Excel range
+                {
+                    ExcelNamedRange namedRange = _workbook.Names[settings.NamedRange];
+                    if ( namedRange != null )
                     {
-                        ExcelAddressBase usedRange = _sheet.Dimension;
-                        _startRowIndex = usedRange.Start.Row;
-                        _startColumnIndex = usedRange.Start.Column;
-                        _lastRowIndex = usedRange.End.Row;
-                        _lastColumnIndex = usedRange.End.Column;
+                        // Change the sheet to where the name range was found
+                        _sheet = namedRange.Worksheet;
+
+                        string addr = namedRange.Address;
+                        _lastRowIndex = namedRange.End.Row;
+                        _lastColumnIndex = namedRange.End.Column;
+                        _startRowIndex = namedRange.Start.Row;
+                        _startColumnIndex = namedRange.Start.Column;
+
                     }
                 }
-                else if (settings.IsNamedRange || settings.IsSpecificRange)
+                else if ( settings.IsSpecificRange ) // looking for address like "A3:E20"
                 {
-                    _sheet = _workbook.Worksheets[1];
-
-                    if (settings.IsNamedRange)
+                    var addr = new ExcelAddress(settings.SpecificRange);
+                    if (addr != null)
                     {
-                        ExcelNamedRange namedRange = _workbook.Names[settings.NamedRange];
-                        _sheet = namedRange.Worksheet;  //?? add error check
-
-                        //DefinedName definedName =   DefinedNames.GetDefinedName(settings.NamedRange);
-
-                        //aref = definedName.Range;
-                        //_sheet = aref.Worksheet;
-
-                    }
-                    else
-                    {
-                        _sheet = _workbook.Worksheets[settings.Worksheet];
-                    }
-
-                    if ( _sheet != null)
-                    {
-                        ExcelAddressBase addr = _sheet.Dimension;
-
                         _lastRowIndex = addr.End.Row;
                         _lastColumnIndex = addr.End.Column;
                         _startRowIndex = addr.Start.Row;
                         _startColumnIndex = addr.Start.Column;
                     }
-                    else
-                    {
-                        throw new InvalidOperationException("Cannot resolve specified range");
-                    }
+                }
+                else
+                {
+                    throw new InvalidOperationException("Setting is not Worksheet, Named, or Specific");
                 } // if named or specific range
             } // package exists
         }
 
         /// <summary>
-        /// To avoid always opening files (which when large can be a lengthy operation) this
+        /// To avoid always opening files (which - when large - can be a lengthy operation) this
         /// method allows us to get the in-memory cached version instead.
+        /// Null is returned if there is on in-cache valid version.
+        /// Reasons for being invalid: 
+        /// 1. Disk version is newer than cached version.
+        /// 2. Cannot find cached version.
         /// </summary>
         /// <param name="fileName"></param>
         /// <param name="openContext"></param>
@@ -475,6 +504,9 @@ namespace ExcelGridDataProviderEPPlus
         }
 
         List<GridDataColumnInfo> _columns;
+        /// <summary>
+        /// This method expects:  _sheet, _columns, _startRowIndex, _lastRowIndex.
+        /// </summary>
         public IEnumerable<GridDataColumnInfo> Columns
         {
             get
@@ -495,40 +527,29 @@ namespace ExcelGridDataProviderEPPlus
                         // The first row contains the column names
                         if (cell != null)
                         {
-                            var type = cell.Value.GetType();
-
-                            if ( type.Name != "String")
-                            {
-                                string xx = type.Name;
-                            }
-
-                            colname = ExcelUtils.GetCellValue(cell, CellValueType.Text).ToString();
-
-                            // If OrderDate, then it comes in as a Double.
-
-                            ////switch (type) // todo: check these out and build a unit test for it.
-                            ////{
-                            ////    case CellValueType.Text:
-                            ////    case CellValueType.Numeric:
-                            ////    case CellValueType.Boolean:
-                            ////        colname = ExcelUtils.GetCellValue(cell, type);
-                            ////        break;
-                            ////}
+                            colname = ExcelUtils.GetCellValue(cell );
                         }
 
                         GridDataColumnInfo info = new GridDataColumnInfo() { Name = colname, Type = typeof(string) };
 
-                        // Look for the first non-null value and use that as the column type.
+                        // Now scan the rows below the header, looking for the first non-null value
+                        // Infer the type and use this as the column type.
                         for (int rr = _startRowIndex + 1; rr <= _lastRowIndex; rr++)
                         {
-                            var vv = _sheet.Cells[rr, cc]?.Value;
+                            cell = _sheet.Cells[rr, cc];
+                            var vv = cell?.Value; // Get cell value according to OpenOfficeXml
+                            if ( vv.GetType().FullName == "System.Double")
+                            {
+                                DateTime dt = DateTime.MinValue;
+                                if ( DateTime.TryParse(cell.Text, out dt))
+                                {
+                                    cell.Value = dt;
+                                }
+                            }
+
                             if (vv != null)
                             {
-                                info.Type = vv.GetType(); // TypeFromCellType(c1, c1.Value.Type);
-                                if ( info.Type.Name != "String")
-                                {
-                                    string xx = "";
-                                }
+                                info.Type = vv.GetType(); //  Store the System type (e.g. System.Double) 
                                 break;
                             }
                         }
@@ -637,6 +658,13 @@ namespace ExcelGridDataProviderEPPlus
         #endregion
     }
 
+    /// <summary>
+    /// Excel recognizes four kinds of information:
+    /// Logical, Numeric, Text, and Error.
+    /// DateTime values are numeric (they are a float of days since 1 Jan 1900, 
+    /// so you use the fractional component to get the time)
+    /// If you want to get a Simio date you have to convert.
+    /// </summary>
     public enum CellValueType
     {
         Text = 0,
@@ -647,94 +675,6 @@ namespace ExcelGridDataProviderEPPlus
         DateTime = 5,
         Unknown = 9
     }
-
-    class ExcelUtils
-    {
-        /// <summary>
-        /// Get the cell value as a string
-        /// </summary>
-        /// <param name="cell"></param>
-        /// <param name="type"></param>
-        /// <returns></returns>
-        public static string GetCellValue(ExcelRange cell, CellValueType type)
-        {
-            switch (type)
-            {
-                case CellValueType.Text:
-                    return cell.Value.ToString(); 
-                case CellValueType.Numeric:
-                    return GetDateTimeOrNumericValueAsString(cell);
-                case CellValueType.Boolean:
-                    return cell.GetValue<bool>().ToString(System.Globalization.CultureInfo.InvariantCulture);
-                case CellValueType.None:
-                    return null;
-                case CellValueType.Error:
-                    return cell.Value.ToString();
-                case CellValueType.DateTime:
-                    return GetDateTimeOrNumericValueAsString(cell);
-                case CellValueType.Unknown:
-                    return "Unknown";
-            }
-
-            return null;
-        }
-
-        /// <summary>
-        /// If the type of the Cell's Value is DateTime, then return
-        /// the value as DateTime, with adjustments to round it to seconds
-        /// when the milliseconds is 995 or greater.
-        /// If the type is Numeric, the return the Cell's value.
-        /// </summary>
-        /// <param name="cell"></param>
-        /// <returns></returns>
-        private static string GetDateTimeOrNumericValueAsString(ExcelRange cell)
-        {
-
-            if (cell.Value is DateTime)
-            {
-                DateTime dt = (DateTime) cell.Value;
-                if (dt.Millisecond >= 995)
-                {
-                    // Excel stores things as Days from Jan 1, 1900 (or Jan 1, 1904 for the Mac)
-                    // This can (apparently) result in some values like
-                    // 1/7/2016 4:29:59.999 when what was in excel was shown as 1/7/2016 4:30:00, so....
-                    // If we are very, very close to the next second, so we'll go to the next second, since 
-                    //  the ToString() will simply strip off any sub-second values.
-                    dt = dt.AddSeconds(1.0);
-                }
-                return dt.ToString(); // Simio will first try to parse dates in the current culture
-            }
-            else if (cell.Value is Decimal dd)
-            {
-                return dd.ToString(System.Globalization.CultureInfo.InvariantCulture);
-            }
-            else
-            {
-                return cell.Value.ToString();
-            }
-        }
-
-        /// <summary>
-        /// Get a cell as text and try and parse it as a decimal
-        /// Return false if the value is null or isn't a decimal, in which case the dd argument is untouched.
-        /// Return true if a legitimate double (dd) is found and set.
-        /// </summary>
-        /// <param name="cell"></param>
-        /// <param name="dd"></param>
-        /// <returns></returns>
-        public Decimal? GetCellAsDecimal(ExcelRange cell)
-        {
-            if (cell?.Value == null)
-                return null;
-
-            if (Decimal.TryParse(cell.Text, out decimal newValue))
-                return newValue;
-            else
-                return null;
-
-        }
-
-    } // class
 
     /// <summary>
     /// The excel record for the Simio API (which is 0 based)
@@ -764,7 +704,7 @@ namespace ExcelGridDataProviderEPPlus
                 ExcelRange cell = _sheet.Cells[ _rIndex + 1, _cIndex + index ];
 
                 if (cell != null)
-                    return ExcelUtils.GetCellValue(cell, CellValueType.Text); //??todo  // cell.Value.GetType());
+                    return ExcelUtils.GetCellValue(cell); //??todo  // cell.Value.GetType());
 
                 return null;
             }
