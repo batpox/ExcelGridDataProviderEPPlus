@@ -5,12 +5,12 @@ using System.Runtime.InteropServices;
 // General Information about an assembly is controlled through the following 
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
-[assembly: AssemblyTitle("ExcelGridDataProvider")]
+[assembly: AssemblyTitle("ExcelGridDataProviderEPPlus")]
 [assembly: AssemblyDescription("Data provider for Excel spreadsheets. This version uses EPPlus")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("Simio LLC")]
-[assembly: AssemblyProduct("ExcelGridDataProvider")]
-[assembly: AssemblyCopyright("Copyright © 2006-2019, Simio LLC. All Rights Reserved.")]
+[assembly: AssemblyProduct("ExcelGridDataProviderEPPlus")]
+[assembly: AssemblyCopyright("Copyright © 2006-2020, Simio LLC. All Rights Reserved.")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 
@@ -32,5 +32,5 @@ using System.Runtime.InteropServices;
 // You can specify all the values or you can default the Build and Revision Numbers 
 // by using the '*' as shown below:
 // [assembly: AssemblyVersion("1.0.*")]
-[assembly: AssemblyVersion("19.12.17.0")]
-[assembly: AssemblyFileVersion("19.12.17.0")]
+[assembly: AssemblyVersion("20.2.1.0")]
+[assembly: AssemblyFileVersion("20.2.1.0")]

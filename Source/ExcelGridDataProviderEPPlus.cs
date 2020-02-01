@@ -704,9 +704,12 @@ namespace ExcelGridDataProviderEPPlus
                 ExcelRange cell = _sheet.Cells[ _rIndex + 1, _cIndex + index ];
 
                 if (cell != null)
-                    return ExcelUtils.GetCellValue(cell); //??todo  // cell.Value.GetType());
-
-                return null;
+                {
+                    var vv = ExcelUtils.GetCellValue(cell);
+                    return vv;
+                }
+                else
+                    return null;
             }
         }
 

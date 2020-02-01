@@ -10,7 +10,8 @@ namespace ExcelGridDataProviderEPPlus
     public static class ExcelUtils
     {
         /// <summary>
-        /// Get the cell value as a string
+        /// Get the cell value and return as a string.
+        /// If a double, we'll return a datetime if it parses as a datetime.
         /// </summary>
         /// <param name="cell"></param>
         /// <param name="type"></param>
@@ -24,45 +25,45 @@ namespace ExcelGridDataProviderEPPlus
                     {
                         DateTime dt = DateTime.MinValue;
                         if (DateTime.TryParse(cell.Text, out dt))
-                            return GetDateTimeOrNumericValueAsString(cell);
+                        {
+                            var vv = GetDateTimeOrNumericValueAsString(cell);
+                            return vv;
+                        }
                         else
-                            return cell.Text;
+                        {
+                            var vv = cell.Value.ToString();
+                            return vv;
+                        }
                     }
-                    break;
+
+                case Decimal dd:
+                    {
+                        var vv =  dd.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                        return vv;
+                    }
 
                 case string ss:
                         return ss;
 
                 case DateTime dt:
-                        return GetDateTimeOrNumericValueAsString(cell);
+                    {
+                        var vv = GetDateTimeOrNumericValueAsString(cell);
+                        return vv;
+                    }
 
                 case Boolean bb:
-                    return cell.Value.ToString();
+                    {
+                        var vv = cell.GetValue<bool>().ToString(System.Globalization.CultureInfo.InvariantCulture);
+                        return vv;
+                    }
 
                 default:
+                    {
+                        string xx = "";
+                    }
                     break;
             }
 
-
-
-            ////    case CellValueType.Text:
-            ////        {
-
-            ////            return cell.Value.ToString();
-            ////        }
-            ////    case CellValueType.Numeric:
-            ////        return GetDateTimeOrNumericValueAsString(cell);
-            ////    case CellValueType.Boolean:
-            ////        return cell.GetValue<bool>().ToString(System.Globalization.CultureInfo.InvariantCulture);
-            ////    case CellValueType.None:
-            ////        return null;
-            ////    case CellValueType.Error:
-            ////        return cell.Value.ToString();
-            ////    case CellValueType.DateTime:
-            ////        return GetDateTimeOrNumericValueAsString(cell);
-            ////    case CellValueType.Unknown:
-            ////        return "Unknown";
-            ////}
 
             return null;
         }
